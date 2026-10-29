@@ -1,351 +1,380 @@
 # Cloud Task Manager
 
-A cloud-native task management application developed using Python Flask microservices, PostgreSQL, Docker, and Kubernetes.
+A cloud-native task management application built as a student project using **Python Flask microservices, PostgreSQL, Docker, and Kubernetes**.
 
-This is a student project that demonstrates microservices architecture, RESTful communication, containerization, independent horizontal scaling, and persistent database storage.
+The project demonstrates REST APIs, containerization, service-to-service communication, independent horizontal scaling, Kubernetes orchestration, and persistent database storage.
 
 ## 1. Project Overview
 
-Cloud Task Manager allows users to create projects, manage tasks, update task statuses, and monitor project progress through a browser-based interface.
+Cloud Task Manager provides a browser-based interface for creating projects, managing tasks, updating task statuses, deleting tasks, and monitoring project progress.
 
-The application consists of two independently deployable microservices:
+The application contains **two independently deployable and scalable microservices**:
 
-- **Project Service:** Manages projects, serves the web interface, and communicates with the Task Service.
-- **Task Service:** Manages tasks, including creation, retrieval, status updates, and deletion.
+- **Project Service:** Manages projects, serves the web interface, and forwards task-related browser requests to the Task Service.
+- **Task Service:** Manages task creation, retrieval, status updates, and deletion.
 
-Both services communicate with a PostgreSQL database running inside Kubernetes.
+Both services connect to a PostgreSQL database deployed in the Kubernetes cluster. The browser accesses the application through the Project Service; the Task Service is reached through an internal Kubernetes Service.
 
 ## 2. Technologies
 
 | Technology | Purpose |
 |---|---|
-| Python | Backend development |
+| Python | Backend application logic |
 | Flask | REST API implementation |
-| PostgreSQL | Persistent relational database |
-| SQLAlchemy | Database interaction |
-| Docker | Containerization |
-| Docker Hub | Container image registry |
-| Kubernetes | Container orchestration |
-| Minikube | Local Kubernetes cluster |
+| SQLAlchemy and psycopg | Database access |
+| PostgreSQL | Relational data storage |
+| Docker | Container images |
+| Docker Hub | Image registry |
+| Kubernetes | Deployment, networking, and scaling |
+| Minikube | Local Kubernetes environment |
 | HTML, CSS, JavaScript | Browser-based user interface |
 | Git and GitHub | Version control and source hosting |
 
 ## 3. Architecture
 
 ```text
-                    Web Browser
-                         |
-                         v
-                Project Service
-                 Flask REST API
-                  Port 5000
-                         |
-              +----------+----------+
-              |                     |
-              v                     v
-       PostgreSQL             Task Service
-        Port 5432              Flask REST API
-                                Port 5001
-                                    |
-                                    v
-                                PostgreSQL
-                                 Port 5432
+                         Web Browser
+                              |
+                              v
+                 Project Service (Flask)
+                     Port 5000 / UI
+                    /             \
+                   v               v
+         PostgreSQL Service    Task Service (Flask)
+              Port 5432            Port 5001
+                                      |
+                                      v
+                               PostgreSQL Service
+                                   Port 5432
 ```
 
-The Project Service provides the browser interface and project-related REST endpoints.
+The **Project Service** exposes the web interface and project REST endpoints. Its `/tasks-api/` route forwards browser requests to the **Task Service**, which exposes task REST endpoints. Both services access the same PostgreSQL instance.
 
-The Task Service provides task-related REST endpoints.
+Kubernetes Services provide stable names and route traffic to available application Pods. The PostgreSQL files are stored using a PersistentVolumeClaim (PVC).
 
-Kubernetes Services provide stable internal networking between the containers.
+> **Scope:** This is a local educational demonstration. The two microservices are separately deployed and scaled, but they share a database, which creates coupling and a common availability dependency.
 
-## 4. Project Structure
+## 4. Repository Structure
 
 ```text
 cloud-task-manager/
-|
-|-- project-service/
-|   |-- app.py
-|   |-- Dockerfile
-|   |-- requirements.txt
-|   `-- templates/
-|       `-- index.html
-|
-|-- task-service/
-|   |-- app.py
-|   |-- Dockerfile
-|   `-- requirements.txt
-|
-|-- kubernetes/
-|   `-- app.yaml
-|
-|-- .gitignore
-`-- README.md
+├── kubernetes/
+│   └── app.yaml
+├── project-service/
+│   ├── app.py
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── templates/
+│       └── index.html
+├── task-service/
+│   ├── app.py
+│   ├── Dockerfile
+│   └── requirements.txt
+├── screenshots/
+│   ├── 01-kubernetes-deployments.png
+│   ├── 02-kubernetes-pods.png
+│   ├── 03-postgresql-persistent-storage.png
+│   └── 04-cloud-task-manager-ui.png
+├── .gitignore
+└── README.md
 ```
 
-## 5. REST API
+The `screenshots/` folder contains evidence from the running Minikube deployment.
+
+## 5. Application Features and REST APIs
+
+**Browser features:**
+
+- Create and view projects.
+- Add tasks to a selected project.
+- Change task status between **Pending**, **In Progress**, and **Completed**.
+- Delete tasks.
+- View total tasks, completed tasks, and percentage progress.
 
 ### Project Service
 
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/` | Display the web interface |
-| GET | `/health` | Service health check |
-| GET | `/api/projects` | Retrieve projects |
+| GET | `/health` | Readiness endpoint |
+| GET | `/api/projects` | List projects |
 | POST | `/api/projects` | Create a project |
-| GET | `/api/projects/<id>/summary` | Retrieve a project summary |
+| GET | `/api/projects/<id>/summary` | Retrieve project summary |
+| Various | `/tasks-api/<path>` | Forward task API requests to the Task Service |
 
 ### Task Service
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/health` | Service health check |
-| GET | `/api/tasks` | Retrieve tasks |
+| GET | `/health` | Readiness endpoint |
+| GET | `/api/tasks` | List tasks (optionally filtered by project) |
 | POST | `/api/tasks` | Create a task |
 | PUT | `/api/tasks/<id>` | Update a task |
 | DELETE | `/api/tasks/<id>` | Delete a task |
 
-The Project Service also exposes a `/tasks-api/` reverse-proxy route for browser requests to the Task Service.
-
 ## 6. Docker Images
 
-The application uses two custom Docker images published to Docker Hub.
+Two custom application images are published to Docker Hub:
 
-**Project Service:**
+| Service | Image |
+|---|---|
+| Project Service | `v2sumac/cloud-project-service:1.2` |
+| Task Service | `v2sumac/cloud-task-service:1.2` |
 
-`v2sumac/cloud-project-service:1.2`
+Build the images from the repository root:
 
-**Task Service:**
-
-`v2sumac/cloud-task-service:1.2`
-
-Build the images:
-
-```bash
+```powershell
 docker build -t v2sumac/cloud-project-service:1.2 ./project-service
 docker build -t v2sumac/cloud-task-service:1.2 ./task-service
 ```
 
-Push the images:
+Push them to Docker Hub (requires permission to publish to the repositories):
 
-```bash
+```powershell
 docker push v2sumac/cloud-project-service:1.2
 docker push v2sumac/cloud-task-service:1.2
 ```
 
+The Kubernetes manifest references these image tags.
+
 ## 7. Kubernetes Deployment
 
-The Kubernetes configuration is located in:
+All Kubernetes resources are declared in `kubernetes/app.yaml`, except the database password Secret, which must be created separately.
 
-`kubernetes/app.yaml`
+The manifest defines:
 
-It defines:
-
-- ConfigMap for application configuration
-- PersistentVolumeClaim for PostgreSQL
+- ConfigMap (`task-config`)
+- PersistentVolumeClaim (`postgres-data`)
 - PostgreSQL Deployment and Service
-- Project Service Deployment and Service
-- Task Service Deployment and Service
+- Project Service Deployment and NodePort Service
+- Task Service Deployment and internal Service
 
 ### Prerequisites
 
-- Docker Desktop
-- Minikube
-- kubectl
+- Docker Desktop with its Docker engine running
+- Minikube and `kubectl` installed
+- Sufficient local CPU and memory
 - Access to the published Docker images
 
-### Start Minikube
+### 7.1 Start Minikube
 
-```bash
+```powershell
 minikube start --driver=docker --cpus=2 --memory=3072
+kubectl get nodes
 ```
 
-### Create the database Secret
+### 7.2 Create the database Secret
 
-The application expects a Kubernetes Secret named `task-db-secret` containing the key `POSTGRES_PASSWORD`.
+The manifest expects a Kubernetes Secret named `task-db-secret` with the key `POSTGRES_PASSWORD`.
 
-Create it before deploying:
+In **PowerShell**, enter a password without saving it in the repository:
 
-```bash
-kubectl create secret generic task-db-secret \
-  --from-literal=POSTGRES_PASSWORD='REPLACE_WITH_A_STRONG_PASSWORD'
+```powershell
+$DbPassword = Read-Host "Enter a database password"
+kubectl create secret generic task-db-secret --from-literal="POSTGRES_PASSWORD=$DbPassword"
+Remove-Variable DbPassword
 ```
 
-Replace the placeholder with a suitable password.
+Use a password that does not contain URL-special characters for this demonstration, because the current `DATABASE_URL` configuration interpolates the password into a connection string. A production implementation should safely encode credentials or construct the connection parameters separately.
 
-The actual password must not be committed to Git.
+**Important:** On an existing deployment with initialized PostgreSQL data, creating a new Secret with a different password will not automatically change the database user's stored password. Reuse the existing Secret when redeploying the running application.
 
-### Deploy the application
+### 7.3 Apply the Kubernetes manifest
 
-```bash
+```powershell
 kubectl apply -f kubernetes/app.yaml
-```
-
-Check the deployment:
-
-```bash
 kubectl get deployments
 kubectl get pods
 kubectl get services
+kubectl get pvc
 ```
 
-### Access the browser interface
+Expected application replica counts in the committed manifest:
 
-```bash
+| Deployment | Replicas |
+|---|---:|
+| PostgreSQL | 1 |
+| Project Service | 2 |
+| Task Service | 2 |
+
+Wait for each Deployment to become ready:
+
+```powershell
+kubectl rollout status deployment/postgres --timeout=180s
+kubectl rollout status deployment/project-service --timeout=180s
+kubectl rollout status deployment/task-service --timeout=180s
+```
+
+### 7.4 Access the application
+
+Keep the following command running in a separate terminal:
+
+```powershell
 kubectl port-forward svc/project-service 8080:5000
 ```
 
-Open the application in a browser at `http://localhost:8080`.
+Open `http://localhost:8080` in a browser. The Project Service also has a NodePort configuration (`30080`) for cluster-dependent access.
 
-## 8. Horizontal Scaling
+## 8. Independent Horizontal Scaling
 
-The Project Service and Task Service are deployed independently.
+The two Flask microservices have separate Kubernetes Deployments, allowing their replica counts to be changed independently.
 
-Each microservice can be scaled without changing the replica count of the other service.
-
-Example:
-
-```bash
-kubectl scale deployment/project-service --replicas=2
-kubectl scale deployment/task-service --replicas=2
-```
-
-Verify:
-
-```bash
+```powershell
+kubectl scale deployment/project-service --replicas=3
 kubectl get deployments
 kubectl get pods -o wide
 ```
 
-During testing, both services successfully ran with two replicas.
+This increases only the Project Service replicas; the Task Service can remain at two replicas. Restore the baseline configuration:
 
-This demonstrates independent horizontal scaling.
+```powershell
+kubectl scale deployment/project-service --replicas=2
+```
 
-## 9. Persistent Storage
+Both application services were successfully demonstrated with **two ready replicas each**, while PostgreSQL remained at one replica. Kubernetes Services route requests to available Pods.
 
-PostgreSQL uses a Kubernetes PersistentVolumeClaim named `postgres-data`.
+Scaling increases service capacity and resilience to individual application Pod failure, but does not eliminate the shared database as a possible bottleneck or single point of failure.
 
-The volume has:
+## 9. PostgreSQL Persistent Storage
 
-- Capacity: 1 GiB
-- Access mode: ReadWriteOnce
-- Storage class: standard
+PostgreSQL uses the PersistentVolumeClaim `postgres-data` with the following observed properties:
 
-Verify the volume:
+| Property | Value |
+|---|---|
+| Capacity | 1 GiB |
+| Access mode | ReadWriteOnce (`RWO`) |
+| Storage class | `standard` |
+| PVC status | `Bound` |
+| PV status | `Bound` |
 
-```bash
+Verify storage:
+
+```powershell
 kubectl get pvc,pv
 ```
 
-The persistent volume separates database files from the temporary container filesystem.
+### Persistence demonstration
 
-A PostgreSQL Pod can be replaced while retaining the existing volume.
+1. Create a project and task in the browser and refresh to verify they were saved.
+2. Replace only the PostgreSQL Pod:
 
-To test persistence:
+   ```powershell
+   kubectl delete pod -l app=postgres
+   ```
 
-1. Create a project and task in the browser.
-2. Verify the data appears.
-3. Delete the PostgreSQL Pod:
+3. Wait until the replacement PostgreSQL Pod is ready:
 
-```bash
-kubectl delete pod -l app=postgres
-```
+   ```powershell
+   kubectl get pods
+   ```
 
-4. Wait for Kubernetes to create a replacement.
-5. Refresh the browser and verify the saved data remains.
+4. Refresh the browser and confirm the existing project and task are still present.
 
-**Note:** Do not delete the PersistentVolumeClaim during this test.
+The PVC keeps the database files separate from the lifecycle of the PostgreSQL container. **Do not delete the PVC** during this test: the dynamically provisioned volume uses a `Delete` reclaim policy.
+
+A `Bound` PVC proves storage provisioning; the before-and-after browser check is needed to verify data persistence in practice.
 
 ## 10. Cloud-Native Design Principles
 
-### Microservices architecture
-
-Project management and task management are implemented as separate services.
-
-### Containerization
-
-Each microservice has its own Dockerfile and Docker image.
-
-### Independent deployment
-
-The Project Service and Task Service can be updated separately.
-
-### Horizontal scalability
-
-Kubernetes can run multiple replicas of either microservice.
-
-### Service discovery
-
-Kubernetes Services provide stable internal names for communication between application components.
-
-### Persistent storage
-
-PostgreSQL stores application data on a persistent volume.
-
-### Health monitoring
-
-Kubernetes readiness probes monitor whether the services are ready to receive requests.
+| Principle | Implementation |
+|---|---|
+| Separation of concerns | Project and task operations are implemented in different Flask services |
+| Containerization | Each microservice has its own Dockerfile and image |
+| Independent deployment | Each application service has its own Kubernetes Deployment |
+| Horizontal scaling | Replica counts can be changed independently |
+| Service discovery | Internal Kubernetes Services resolve service names |
+| Declarative infrastructure | Resources are defined in `kubernetes/app.yaml` |
+| Persistent state | PostgreSQL data is stored through a PVC |
+| Health awareness | HTTP readiness probes check the application services |
+| Self-healing | Kubernetes replaces Pods when a Deployment requires it |
 
 ## 11. Benefits
 
-The architecture provides several advantages:
+- Independent scaling and updates for the two application services.
+- Clear separation between project and task responsibilities.
+- Reproducible container images and declarative Kubernetes configuration.
+- Service discovery and routing managed by Kubernetes.
+- Automated replacement of application and database Pods.
+- Database files persist independently of the PostgreSQL Pod lifecycle.
 
-- Independent scaling of application services
-- Separation of project and task responsibilities
-- Reproducible deployments using Docker images
-- Automated Pod replacement through Kubernetes
-- Persistent database storage
-- Easier maintenance of individual services
+## 12. Challenges and Trade-offs
 
-## 12. Challenges
+- **Operational complexity:** Multiple Deployments, Services, images, and environment variables must be configured correctly.
+- **Service dependencies:** The Project Service depends on the Task Service for task-related operations.
+- **Shared database:** Both services depend on one PostgreSQL instance, which limits isolation and introduces a common failure point.
+- **Image management:** Kubernetes must reference image tags that actually exist in the registry.
+- **Resource use:** Multiple replicas require additional local CPU and memory.
+- **Troubleshooting:** Deployment errors may involve source code, container builds, image publishing, Kubernetes configuration, or database connectivity.
 
-The implementation also introduces challenges:
-
-- Increased deployment complexity compared with a monolithic application
-- Communication dependencies between microservices
-- Database availability affecting both services
-- Container image version management
-- Kubernetes configuration and troubleshooting
-- Additional resource consumption when scaling
-
-During development, container image issues and database connection configuration required troubleshooting.
+During development, the project encountered and resolved Python syntax errors in an image, missing image tags on Docker Hub, and database connection configuration issues.
 
 ## 13. Security Considerations
 
-The application uses a Kubernetes Secret to provide the PostgreSQL password rather than storing the password directly in the deployment YAML.
+### Measures implemented
 
-The Docker containers use a non-root application user.
+- The PostgreSQL password is provided through a Kubernetes Secret reference rather than being committed in the YAML manifest.
+- The application images run the Flask application using a non-root user.
+- PostgreSQL and the Task Service are exposed through internal Kubernetes Services, rather than public NodePorts.
 
-Additional security improvements recommended for production include:
+### Limitations and production improvements
 
-- User authentication and authorization
-- HTTPS/TLS
-- Kubernetes NetworkPolicies
-- Database access restrictions
-- Resource limits and requests
-- Secret rotation and external secret management
-- Automated vulnerability scanning
-- Database backup and recovery procedures
+This is an educational demonstration, **not a production-ready application**. Production deployment would require:
 
-The current implementation is intended as a local educational demonstration rather than a production-ready system.
+- Authentication and authorization for project/task operations.
+- HTTPS/TLS for browser traffic and appropriate protection for internal communication.
+- NetworkPolicies restricting Pod-to-Pod access.
+- Resource requests, limits, and stronger health/liveness checks.
+- Secret rotation and safer credential handling; Kubernetes Secrets are not automatically encrypted at rest in every cluster.
+- Image vulnerability scanning and pinned image digests.
+- Database backups, recovery procedures, and a more resilient database architecture.
+- Monitoring, alerting, and centralized logging.
 
-## 14. Monitoring and Logs
+## 14. Monitoring and Troubleshooting
 
-Kubernetes provides commands for inspecting deployments and application logs.
+Useful Kubernetes commands:
 
-```bash
-kubectl get pods
+```powershell
 kubectl get deployments
-kubectl logs deployment/project-service
-kubectl logs deployment/task-service
-kubectl logs deployment/postgres
+kubectl get pods -o wide
+kubectl get services
+kubectl get pvc,pv
+kubectl logs deployment/project-service --tail=30
+kubectl logs deployment/task-service --tail=30
+kubectl logs deployment/postgres --tail=30
 ```
 
-These commands help identify runtime errors and investigate application behavior.
+For a specific failing Pod, use `kubectl describe pod <pod-name>` and `kubectl logs <pod-name> --previous` when appropriate.
 
-## 15. Conclusion
+## 15. Deployment Evidence and Screenshots
 
-Cloud Task Manager demonstrates the deployment of a browser-based application using two Flask microservices, PostgreSQL, Docker, and Kubernetes.
+The following screenshots were captured from the working local Kubernetes environment.
 
-The implementation supports project and task management, independent horizontal scaling, service discovery, health monitoring, and persistent database storage.
+### 15.1 Kubernetes Deployments
 
-The project illustrates both the benefits and operational challenges of cloud-native software development.
+One PostgreSQL replica and two ready replicas for each Flask microservice demonstrate independent application scaling.
+
+![Kubernetes Deployments](screenshots/01-kubernetes-deployments.png)
+
+### 15.2 Kubernetes Pods
+
+Five healthy Pods, including two Project Service Pods and two Task Service Pods, demonstrate the deployed service instances.
+
+![Kubernetes Pods](screenshots/02-kubernetes-pods.png)
+
+### 15.3 PostgreSQL Persistent Storage
+
+The PostgreSQL PVC and its associated PV are both `Bound`, with 1 GiB of provisioned storage.
+
+![PostgreSQL Persistent Storage](screenshots/03-postgresql-persistent-storage.png)
+
+### 15.4 Cloud Task Manager Interface
+
+The browser UI shows the project list, task management controls, and progress statistics.
+
+![Cloud Task Manager Web Interface](screenshots/04-cloud-task-manager-ui.png)
+
+## 16. Conclusion
+
+Cloud Task Manager demonstrates a browser-based application built from two Flask microservices, PostgreSQL, Docker images, and Kubernetes resources.
+
+The working deployment includes independent horizontal scaling, internal service discovery, readiness checks, browser-accessible functionality, and a provisioned persistent database volume. The project also illustrates the operational and security trade-offs that accompany a microservices-based, cloud-native architecture.
