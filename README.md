@@ -2,7 +2,7 @@
 
 A cloud-native task management application developed using Python Flask microservices, PostgreSQL, Docker, and Kubernetes.
 
-This project demonstrates microservices architecture, RESTful communication, containerization, independent horizontal scaling, and persistent database storage.
+This is a student project that demonstrates microservices architecture, RESTful communication, containerization, independent horizontal scaling, and persistent database storage.
 
 ## 1. Project Overview
 
