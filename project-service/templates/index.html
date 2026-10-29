@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cloud Task Manager</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f5f7;
+            color: #20252b;
+        }
+        header {
+            background: #20252b;
+            color: white;
+            padding: 26px 35px;
+        }
+        header h1 { margin: 0 0 8px; }
+        header p {
+            margin: 0;
+            color: #e2e5e9;
+        }
+        main {
+            max-width: 1100px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 22px;
+            margin-bottom: 20px;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.07);
+        }
+        h2 { margin-top: 0; }
+        input, textarea, select, button {
+            font: inherit;
+            padding: 11px;
+            border-radius: 6px;
+        }
+        input, textarea, select {
+            border: 1px solid #cbd0d6;
+            width: 100%;
+            margin-bottom: 12px;
+        }
+        textarea { min-height: 75px; }
+        button {
+            background: #272d34;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover { background: #111418; }
+        button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, .project:focus-visible { outline: 2px solid #444b54; outline-offset: 2px; }
+        button:disabled {
+            background: #a7adb4;
+            cursor: not-allowed;
+        }
+        .project {
+            padding: 13px;
+            border: 1px solid #d8dde2;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+        .project:hover { background: #f1f3f5; }
+        .project.selected {
+            border-color: #272d34;
+            background: #eceff2;
+        }
+        .project small {
+            display: block;
+            color: #606b76;
+            margin-top: 5px;
+        }
+        .task {
+            display: grid;
+            grid-template-columns: 1fr 165px 80px;
+            gap: 12px;
+            align-items: center;
+            border-bottom: 1px solid #e8ebee;
+            padding: 12px 0;
+        }
+        .task select { margin: 0; }
+        .task button {
+            background: #bb3030;
+        }
+        .task button:hover { background: #942323; }
+        .muted { color: #606b76; }
+        .stats {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .stat {
+            background: #eef0f2;
+            border-radius: 8px;
+            padding: 12px;
+            flex: 1;
+            text-align: center;
+        }
+        .stat strong {
+            display: block;
+            font-size: 24px;
+        }
+        #message {
+            margin-bottom: 18px;
+            padding: 12px;
+            border-radius: 8px;
+            display: none;
+        }
+        #message.error {
+            display: block;
+            background: #ffe8e8;
+            color: #8b2020;
+        }
+        #message.success {
+            display: block;
+            background: #e5f7ec;
+            color: #18603b;
+        }
+        @media (max-width: 760px) {
+            .grid { grid-template-columns: 1fr; }
+            .task { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Cloud Task Manager</h1>
+        <p>Flask Microservices | PostgreSQL | Docker | Kubernetes</p>
+    </header>
+    <main>
+        <div id="message"></div>
+        <div class="grid">
+            <section>
+                <div class="card">
+                    <h2>Create Project</h2>
+                    <form id="projectForm">
+                        <input
+                            id="projectName"
+                            placeholder="Project name"
+                            maxlength="200"
+                            required
+                        >
+                        <textarea
+                            id="projectDescription"
+                            placeholder="Project description"
+                        ></textarea>
+                        <button type="submit">Create Project</button>
+                    </form>
+                </div>
+                <div class="card">
+                    <h2>Projects</h2>
+                    <div id="projectList">
+                        <p class="muted">Loading projects...</p>
+                    </div>
+                </div>
+            </section>
+            <section>
+                <div class="card">
+                    <h2 id="selectedProjectTitle">Select a Project</h2>
+                    <p id="selectedProjectDescription" class="muted">
+                        Choose a project to manage its tasks.
+                    </p>
+                    <div class="stats">
+                        <div class="stat">
+                            <strong id="totalTasks">0</strong>
+                            Total Tasks
+                        </div>
+                        <div class="stat">
+                            <strong id="completedTasks">0</strong>
+                            Completed
+                        </div>
+                        <div class="stat">
+                            <strong id="progress">0%</strong>
+                            Progress
+                        </div>
+                    </div>
+                    <form id="taskForm">
+                        <input
+                            id="taskTitle"
+                            placeholder="New task title"
+                            maxlength="200"
+                            required
+                        >
+                        <button id="addTaskButton" type="submit" disabled>
+                            Add Task
+                        </button>
+                    </form>
+                    <h3>Tasks</h3>
+                    <div id="taskList">
+                        <p class="muted">No project selected.</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+    <script>
+        let projects = [];
+        let selectedProjectId = null;
+        const statuses = ["Pending", "In Progress", "Completed"];
+        function showMessage(text, isError = false) {
+            const element = document.getElementById("message");
+            element.textContent = text;
+            element.className = isError ? "error" : "success";
+            setTimeout(() => {
+                element.className = "";
+                element.style.display = "none";
+            }, 4000);
+            element.style.display = "block";
+        }
+        async function api(url, options = {}) {
+            const response = await fetch(url, {
+                ...options,
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(options.headers || {})
+                }
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || "Request failed");
+            }
+            return data;
+        }
+        async function loadProjects() {
+            try {
+                projects = await api("/api/projects");
+                const list = document.getElementById("projectList");
+                list.innerHTML = "";
+                if (projects.length === 0) {
+                    list.textContent = "No projects yet.";
+                    return;
+                }
+                projects.forEach(project => {
+                    const item = document.createElement("div");
+                    item.className = "project";
+                    if (project.id === selectedProjectId) {
+                        item.classList.add("selected");
+                    }
+                    const name = document.createElement("strong");
+                    name.textContent = project.name;
+                    const description = document.createElement("small");
+                    description.textContent = project.description || "";
+                    item.append(name, description);
+                    item.onclick = () => selectProject(project.id);
+                    list.appendChild(item);
+                });
+            } catch (error) {
+                showMessage(error.message, true);
+            }
+        }
+        async function selectProject(projectId) {
+            selectedProjectId = projectId;
+            const project = projects.find(p => p.id === projectId);
+            document.getElementById("selectedProjectTitle").textContent =
+                project.name;
+            document.getElementById("selectedProjectDescription").textContent =
+                project.description || "No description.";
+            document.getElementById("addTaskButton").disabled = false;
+            await loadProjects();
+            await loadTasks();
+        }
+        async function loadTasks() {
+            if (selectedProjectId === null) return;
+            try {
+                const tasks = await api(
+                    `/tasks-api/tasks?project_id=${selectedProjectId}`
+                );
+                const list = document.getElementById("taskList");
+                list.innerHTML = "";
+                document.getElementById("totalTasks").textContent =
+                    tasks.length;
+                const completed = tasks.filter(
+                    task => task.status === "Completed"
+                ).length;
+                document.getElementById("completedTasks").textContent =
+                    completed;
+                document.getElementById("progress").textContent =
+                    tasks.length
+                        ? Math.round(completed / tasks.length * 100) + "%"
+                        : "0%";
+                if (tasks.length === 0) {
+                    list.textContent = "No tasks yet.";
+                    return;
+                }
+                tasks.forEach(task => {
+                    const row = document.createElement("div");
+                    row.className = "task";
+                    const title = document.createElement("span");
+                    title.textContent = task.title;
+                    const select = document.createElement("select");
+                    statuses.forEach(status => {
+                        const option = document.createElement("option");
+                        option.value = status;
+                        option.textContent = status;
+                        if (status === task.status) {
+                            option.selected = true;
+                        }
+                        select.appendChild(option);
+                    });
+                    select.onchange = async () => {
+                        try {
+                            await api(`/tasks-api/tasks/${task.id}`, {
+                                method: "PUT",
+                                body: JSON.stringify({
+                                    status: select.value
+                                })
+                            });
+                            await loadTasks();
+                        } catch (error) {
+                            showMessage(error.message, true);
+                        }
+                    };
+                    const remove = document.createElement("button");
+                    remove.textContent = "Delete";
+                    remove.onclick = async () => {
+                        if (!confirm("Delete this task?")) return;
+                        try {
+                            await api(`/tasks-api/tasks/${task.id}`, {
+                                method: "DELETE"
+                            });
+                            await loadTasks();
+                        } catch (error) {
+                            showMessage(error.message, true);
+                        }
+                    };
+                    row.append(title, select, remove);
+                    list.appendChild(row);
+                });
+            } catch (error) {
+                showMessage(error.message, true);
+            }
+        }
+        document.getElementById("projectForm").onsubmit =
+            async event => {
+                event.preventDefault();
+                try {
+                    const project = await api("/api/projects", {
+                        method: "POST",
+                        body: JSON.stringify({
+                            name: document.getElementById(
+                                "projectName"
+                            ).value,
+                            description: document.getElementById(
+                                "projectDescription"
+                            ).value
+                        })
+                    });
+                    event.target.reset();
+                    await loadProjects();
+                    await selectProject(project.id);
+                    showMessage("Project created successfully.");
+                } catch (error) {
+                    showMessage(error.message, true);
+                }
+            };
+        document.getElementById("taskForm").onsubmit =
+            async event => {
+                event.preventDefault();
+                if (selectedProjectId === null) return;
+                try {
+                    await api("/tasks-api/tasks", {
+                        method: "POST",
+                        body: JSON.stringify({
+                            project_id: selectedProjectId,
+                            title: document.getElementById(
+                                "taskTitle"
+                            ).value
+                        })
+                    });
+                    event.target.reset();
+                    await loadTasks();
+                    showMessage("Task created successfully.");
+                } catch (error) {
+                    showMessage(error.message, true);
+                }
+            };
+        loadProjects();
+    </script>
+</body>
+</html>
